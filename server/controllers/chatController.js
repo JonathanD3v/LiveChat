@@ -30,27 +30,33 @@ const getOrCreateConversation = async (userId) => {
 };
 
 // Send message from user to admin or admin to user
-const sendMessage = async (conversationId, senderId, content) => {
-  // Verify conversation exists
-  const conversation = await Conversation.findById(conversationId);
-  if (!conversation) {
-    throw new Error('Conversation not found');
+const sendMessage = async (conversationId, senderId, content, type = 'text') => {
+  if (type === 'text') {
+    if (!content || content.length > 500) {
+      throw new Error('Text message must be between 1 and 500 characters.');
+    }
+  } else if (type === 'image') {
+    if (!content || typeof content !== 'string' || !content.match(/\.(jpeg|jpg|png|gif|webp)$/i)) {
+      throw new Error('Image content must be a valid image URL ending in .jpg, .png, etc.');
+    }
+  } else {
+    throw new Error('Invalid message type.');
   }
 
-  // Verify sender is part of the conversation
+  const conversation = await Conversation.findById(conversationId);
+  if (!conversation) throw new Error("Conversation not found");
+
   const allowedIds = [conversation.user.toString()];
-if (conversation.admin) allowedIds.push(conversation.admin.toString());
+  if (conversation.admin) allowedIds.push(conversation.admin.toString());
+  if (!allowedIds.includes(senderId.toString())) {
+    throw new Error("Unauthorized to send message in this conversation");
+  }
 
-if (!allowedIds.includes(senderId.toString())) {
-  throw new Error('Unauthorized to send message in this conversation');
-}
-  
-
-  // Create and save message
   const message = new Message({
     conversation: conversationId,
     sender: senderId,
-    content
+    content,
+    type
   });
 
   await message.save();

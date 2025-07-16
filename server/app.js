@@ -4,13 +4,7 @@ const mongoose = require("mongoose");
 const socketIo = require("socket.io");
 const http = require("http");
 require("dotenv").config();
-
-const formatMessage = require("./utils/formatMSG");
-// const {
-//   saveUser,
-//   getDisconnectUser,
-//   getSameRoomUsers,
-// } = require("./utils/user");
+const path = require("path");
 
 const Message = require("./models/Message");
 const messageController = require("./controllers/message");
@@ -31,6 +25,9 @@ const io = socketIo(server, {
 app.use(express.json());
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 // Routes
 app.use("/api", authRoutes);
@@ -68,7 +65,6 @@ io.on("connection", (socket) => {
     socket.join(conversationId)
   })
 
-
   socket.on("typing", ({ conversationId }) => {
     socket.broadcast.to(conversationId).emit("typing", socket.user.userId);
   });
@@ -77,7 +73,6 @@ io.on("connection", (socket) => {
     await Message.findByIdAndUpdate(messageId, { read: true });
   });
   
-
   socket.on("send_message", async (data) => {
     // data: { conversationId, senderId, content, type }
     const message = await Message.create({
@@ -95,7 +90,7 @@ io.on("connection", (socket) => {
         const welcomeMessage = await Message.create({
           conversation: data.conversationId,
           sender: null,
-          content: "Hi! An admin will reply to you shortly.",
+          content: "Hi! Channel to my welcome.",
           type: "text"
         });
         io.to(data.conversationId).emit("receive_message", welcomeMessage);
@@ -108,6 +103,6 @@ app.set("io", io);
 
 // Start Server
 const PORT = process.env.PORT || 5555;
-server.listen(PORT, () => {
-  console.log(`Server is running at port - ${PORT}`);
+server.listen(PORT,'0.0.0.0', () => {
+  console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });
