@@ -1,0 +1,18 @@
+{
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2",
+    "express-validator": "^7.2.1",
+    "google-libphonenumber": "^3.2.42",
+    "jsonwebtoken": "^9.0.2",
+    "moment-timezone": "^0.6.0",
+    "mongoose": "^8.4.4",
+    "socket.io": "^4.7.5"
+  },
+  "scripts": {
+    "start": "node --watch app"
+  }
+}
