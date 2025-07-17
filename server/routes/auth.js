@@ -17,7 +17,7 @@ const checkMyanmarPhoneNumber = (phone) => {
 };
 
 router.get("/", (req, res) => {
-  return res.json({ success: 1, message: "Welcome to Stock 2D API" });
+  return res.json({ success: 1, message: "Welcome to Live Chatting Platform!" });
 });
 
 router.post(
