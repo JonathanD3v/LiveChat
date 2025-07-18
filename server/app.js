@@ -74,7 +74,6 @@ io.on("connection", (socket) => {
   });
   
   socket.on("send_message", async (data) => {
-    // data: { conversationId, senderId, content, type }
     const message = await Message.create({
       conversation: data.conversationId,
       sender: data.senderId,

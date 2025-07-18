@@ -1,8 +1,7 @@
 const User = require("../models/User");
 
 const isAdmin = async (req, res, next) => {
-  const { role } = req.body;
-  if (role === "admin") {
+  if (req.user?.role === "admin") {
     next();
   } else {
     res

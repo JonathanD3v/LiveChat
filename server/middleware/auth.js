@@ -11,7 +11,6 @@ module.exports = async (req, res, next) => {
 
     const decryptedTokenDetails = jwt.verify(token, process.env.JWT_KEY);
 
-    // ✅ Fix here
     req.user = {
       _id: decryptedTokenDetails.userId,
       role: decryptedTokenDetails.role,

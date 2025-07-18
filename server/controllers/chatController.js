@@ -1,162 +1,362 @@
+const { default: mongoose, mongo } = require('mongoose');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const User = require('../models/User');
 
-// Start or get conversation between user and admin
 const getOrCreateConversation = async (userId) => {
-  // Find existing conversation
-  let conversation = await Conversation.findOne({ user: userId })
-    .populate('user', 'name role')
-    .populate('admin', 'name role');
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (conversation) {
-    return conversation;
+  try {
+    let conversation = await Conversation.findOne({ user: userId })
+      .populate('user', 'name role')
+      .populate('admin', 'name role')
+      .session(session);
+
+    if (conversation) {
+      await session.endSession();
+      return conversation;
+    }
+
+    const admin = await User.findOne({ role: 'admin' });
+    if (!admin) throw new Error('No admin available');
+
+    conversation = new Conversation({ user: userId, admin: admin._id });
+    await conversation.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+    return conversation.populate('user admin');
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
   }
-
-  // Find an available admin
-  const admin = await User.findOne({ role: 'admin' });
-  if (!admin) {
-    throw new Error('No admin available');
-  }
-
-  // Create new conversation
-  conversation = new Conversation({
-    user: userId,
-    admin: admin ? admin._id : null
-  });
-
-  await conversation.save();
-  return conversation.populate('user admin');
 };
 
-// Send message from user to admin or admin to user
 const sendMessage = async (conversationId, senderId, content, type = 'text') => {
-  if (type === 'text') {
-    if (!content || content.length > 500) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    if (type === 'text' && (!content || content.length > 500)) {
       throw new Error('Text message must be between 1 and 500 characters.');
     }
-  } else if (type === 'image') {
-    if (!content || typeof content !== 'string' || !content.match(/\.(jpeg|jpg|png|gif|webp)$/i)) {
-      throw new Error('Image content must be a valid image URL ending in .jpg, .png, etc.');
+
+    if (
+      type === 'image' &&
+      (!content ||
+        typeof content !== 'string' ||
+        !content.match(/\.(jpeg|jpg|png|gif|webp)$/i))
+    ) {
+      throw new Error('Invalid image format.');
     }
-  } else {
-    throw new Error('Invalid message type.');
+
+    const conversation = await Conversation.findById(conversationId).session(session);
+    if (!conversation) throw new Error('Conversation not found');
+
+    const allowedIds = [conversation.user.toString(), conversation.admin?.toString()];
+    if (!allowedIds.includes(senderId.toString())) throw new Error('Unauthorized sender');
+
+    const message = await Message.create(
+      [
+        {
+          conversation: conversationId,
+          sender: senderId,
+          content,
+          type,
+        },
+      ],
+      { session }
+    );
+
+    const msg = message[0];
+
+    // Count unread
+    const unreadCount = await Message.countDocuments({
+      conversation: conversationId,
+      sender: { $ne: senderId },
+      read: false,
+    }).session(session);
+
+    // Update conversation's unread count
+    const recipientField = senderId.toString() === conversation.user.toString() ? 'admin' : 'user';
+
+    await Conversation.findByIdAndUpdate(
+      conversationId,
+      {
+        lastMessage: msg._id,
+        [`unreadCount.${recipientField}`]: unreadCount,
+      },
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    const populatedMessage = await Message.populate(msg, {
+      path: 'sender',
+      select: 'name role',
+    });
+
+    return populatedMessage;
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
   }
-
-  const conversation = await Conversation.findById(conversationId);
-  if (!conversation) throw new Error("Conversation not found");
-
-  const allowedIds = [conversation.user.toString()];
-  if (conversation.admin) allowedIds.push(conversation.admin.toString());
-  if (!allowedIds.includes(senderId.toString())) {
-    throw new Error("Unauthorized to send message in this conversation");
-  }
-
-  const message = new Message({
-    conversation: conversationId,
-    sender: senderId,
-    content,
-    type
-  });
-
-  await message.save();
-
-  let recipientField = '';
-  if(senderId.toString() === conversation.user.toString()){
-    recipientField = 'admin'
-  }else{
-    recipientField = 'user'
-  }
-
-  const unreadCount = await Message.countDocuments({
-    conversation:conversationId,
-    sender:{$ne:senderId},
-    read:false
-  })
-
-  // Update conversation last message and unread counts
-  const updateData = { lastMessage: message._id, [`unreadCount.${recipientField}`]:unreadCount };
-  
-
-  await Conversation.findByIdAndUpdate(conversationId, updateData);
-
-  // Populate sender info before returning
-  const populatedMessage = await Message.populate(message, {
-    path: 'sender',
-    select: 'name role'
-  });
-
-  return populatedMessage;
 };
 
-// Get all conversations for admin
-const getAdminConversations = async (adminId) => {
-  return Conversation.find({
-    $or: [
-      { admin: adminId },
-      { admin: null }
-    ]
-  })
-  .populate('user', 'name online')
-  .populate('lastMessage')
-  .sort('-updatedAt');
-};
-  
-
-// Get messages in a conversation
 const getConversationMessages = async (conversationId, userId) => {
-  // Verify user has access to this conversation
   const conversation = await Conversation.findOne({
     _id: conversationId,
-    $or: [{ user: userId }, { admin: userId }]
+    $or: [{ user: userId }, { admin: userId }],
   });
+  if (!conversation) throw new Error('Conversation not found or unauthorized');
 
-  if (!conversation) {
-    throw new Error('Conversation not found or unauthorized');
-  }
+  const senderToMark = userId.toString() === conversation.admin?.toString() ? conversation.user : conversation.admin;
+  const recipient = userId.toString() === conversation.admin?.toString() ? 'admin' : 'user';
 
-  // Mark messages as read
-  if (userId.toString() === conversation.admin?.toString()) {
-    // Admin is viewing - mark user's messages as read
-    await Message.updateMany(
-      { 
-        conversation: conversationId,
-        sender: conversation.user,
-        read: false
-      },
-      { $set: { read: true } }
-    );
-    
-    // Reset admin unread count
-    await Conversation.findByIdAndUpdate(conversationId, {
-      $set: { 'unreadCount.admin': 0 }
+  await Message.updateMany({ conversation: conversationId, sender: senderToMark, read: false }, { $set: { read: true } });
+  await Conversation.findByIdAndUpdate(conversationId, { $set: { [`unreadCount.${recipient}`]: 0 } });
+
+  return await Message.find({ conversation: conversationId }).populate('sender', 'name role').sort('createdAt');
+};
+
+const getAdminConversations = async (adminId) => {
+  return await Conversation.find({
+    $or: [{ admin: adminId }, { admin: null }],
+  })
+    .populate('user', 'name online')
+    .populate('lastMessage')
+    .sort('-updatedAt');
+};
+
+
+const getOrCreateConversationHandler = async (req, res) => {
+  try {
+    const conversation = await getOrCreateConversation(req.user._id);
+    return res.status(200).json({
+      isSuccess: true,
+      message: 'User conversation retrieved successfully',
+      data: conversation,
     });
-  } else {
-    // User is viewing - mark admin's messages as read
-    await Message.updateMany(
-      { 
-        conversation: conversationId,
-        sender: conversation.admin,
-        read: false
-      },
-      { $set: { read: true } }
-    );
-    
-    // Reset user unread count
-    await Conversation.findByIdAndUpdate(conversationId, {
-      $set: { 'unreadCount.user': 0 }
+  } catch (err) {
+    return res.status(400).json({
+      isSuccess: false,
+      message: err.message,
     });
   }
+};
 
-  // Get messages
-  return await Message.find({ conversation: conversationId })
-    .populate('sender', 'name role')
-    .sort('createdAt');
+const getUserConversationMessagesHandler = async (req, res) => {
+  try {
+    const conversation = await getOrCreateConversation(req.user._id);
+    const messages = await getConversationMessages(conversation._id, req.user._id);
+    return res.status(200).json({
+      isSuccess: true,
+      message: 'Messages reterived successfully',
+      data: messages,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      isSuccess: false,
+      message: err.message,
+    });
+  }
+};
+
+const sendUserMessageHandler = async (req, res) => {
+  try {
+    const conversation = await getOrCreateConversation(req.user._id);
+    let { type = 'text', content } = req.body;
+    if (req.file) {
+      type = 'image';
+      content = `/uploads/${req.file.filename}`;
+    }
+
+    const message = await sendMessage(conversation._id, req.user._id, content, type);
+    return res.status(201).json({
+      isSuccess: true,
+      message: 'Message sent successfully.',
+      data: message,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      isSuccess: false,
+      message: err.message,
+    });
+  }
+};
+
+const getAdminConversationsHandler = async (req, res) => {
+  try {
+    const conversations = await getAdminConversations(req.user._id);
+    return res.status(200).json({
+      isSuccess: true,
+      message: 'Admin conversations reterived successfully.',
+      data: conversations,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      isSuccess: false,
+      message: err.message,
+    });
+  }
+};
+
+const getAdminMessagesHandler = async (req, res) => {
+  try {
+    const messages = await getConversationMessages(req.params.conversationId, req.user._id);
+    return res.status(200).json({
+      isSuccess: true,
+      message: 'Messages reterived successfully.',
+      data: messages,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      isSuccess: false,
+      message: err.message,
+    });
+  }
+};
+
+const sendAdminMessageHandler = async (req, res) => {
+  try {
+    let { content, type = 'text' } = req.body;
+    if (req.file) {
+      content = `/uploads/${req.file.filename}`;
+      type = 'image';
+    }
+
+    const message = await sendMessage(req.params.conversationId, req.user._id, content, type);
+    return res.status(201).json({
+      isSuccess: true,
+      message: 'Admin message sent successfully.',
+      data: message,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      isSuccess: false,
+      message: err.message,
+    });
+  }
+};
+
+const deleteMessage = async (messageId, userId) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const message = await Message.findById(messageId).session(session);
+    if (!message) {
+      throw new Error('Message not found!');
+    }
+
+    const conversation = await Conversation.findById(message.conversation).session(session);
+    if (!conversation) throw new Error('Conversation not found');
+    if (message.sender.toString() !== userId.toString()) {
+      throw new Error('Unauthorized to delete this message');
+    }
+    await message.deleteOne({ session });
+
+    // If it was the last message, update it
+    if (conversation.lastMessage?.toString() === messageId) {
+      const previous = await Message.findOne({
+        conversation: message.conversation,
+      })
+        .sort({ createdAt: -1 })
+        .session(session);
+
+      conversation.lastMessage = previous ? previous._id : null;
+      await conversation.save({ session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+    return { isSuccess: true };
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
+};
+
+const deleteMessageHandler = async (req, res) => {
+  try {
+    const result = await deleteMessage(req.params.messageId, req.user._id);
+    return res.status(200).json({
+      isSuccess: true,
+      message: 'Message deleted successfully.',
+      data: result,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      isSuccess: false,
+      message: err.message,
+    });
+  }
+};
+
+const broadcastMessageFromAdmin = async (adminId, content) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const conversations = await Conversation.find({
+      $or: [{ admin: adminId }, { admin: null }],
+    }).session(session);
+
+    const messages = [];
+    for (const convo of conversations) {
+      const message = new Message({
+        conversation: convo._id,
+        sender: adminId,
+        content,
+        type: 'text',
+      });
+
+      await message.save({ session });
+      convo.lastMessage = message._id;
+      convo.unreadCount.user += 1;
+      await convo.save({ session });
+
+      messages.push(message);
+    }
+    await session.commitTransaction();
+    session.endSession();
+
+    return messages;
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
+};
+
+const broadcastMessageHandler = async (req, res) => {
+  try {
+    const { content } = req.body;
+    const messages = await broadcastMessageFromAdmin(req.user._id, content);
+    return res.status(201).json({
+      isSuccess: true,
+      message: 'Broadcast message sent to all conversations.',
+      data: messages,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      isSuccess: false,
+      message: err.message,
+    });
+  }
 };
 
 module.exports = {
-  getOrCreateConversation,
-  sendMessage,
-  getAdminConversations,
-  getConversationMessages
+  getOrCreateConversationHandler,
+  getUserConversationMessagesHandler,
+  sendUserMessageHandler,
+  getAdminConversationsHandler,
+  getAdminMessagesHandler,
+  sendAdminMessageHandler,
+  deleteMessageHandler,
+  broadcastMessageHandler,
 };
