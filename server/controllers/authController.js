@@ -2,6 +2,20 @@ const { validationResult } = require("express-validator");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const Token = require("../models/UserToken");
+require("dotenv").config()
+
+const createToken = (user) => {
+  return jwt.sign(
+    {
+      userId: user._id,
+      role: user.role
+    },
+    process.env.JWT_KEY,
+    { expiresIn: "7d" }
+  );
+};
+
 
 exports.register = async (req, res) => {
   const errors = validationResult(req);
@@ -25,7 +39,7 @@ exports.register = async (req, res) => {
 
     return res.status(201).json({
       isSuccess: true,
-      message: "User created!",
+      message: "User registered successfully!",
       data: { name, phone }
     });
   } catch (error) {
@@ -50,7 +64,12 @@ exports.login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) throw new Error("Invalid password.");
 
-    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_KEY, { expiresIn: "7d" });
+    await Token.deleteMany({userId:user._id})
+
+    const token = createToken(user)
+
+    await Token.create({userId:user._id, token})
+
 
     return res.status(200).json({
       isSuccess: true,
@@ -85,7 +104,11 @@ exports.adminLogin = async (req, res) => {
     const isMatch = await bcrypt.compare(password, admin.password);
     if (!isMatch) throw new Error("Invalid password.");
 
-    const token = jwt.sign({ userId: admin._id, role: admin.role }, process.env.JWT_KEY, { expiresIn: "1d" });
+    await Token.deleteMany({userId:admin._id})
+
+    const token = jwt.sign({ userId: admin._id, role: admin.role }, process.env.JWT_KEY, { expiresIn: "7d" });
+
+    await Token.create({userId:admin._id, token})
 
     return res.status(200).json({
       isSuccess: true,
@@ -103,9 +126,14 @@ exports.adminLogin = async (req, res) => {
   }
 };
 
-exports.logout = (req, res) => {
-  req.session?.destroy?.((err) => {
-    if (err) return res.status(500).send("fail");
-    res.status(200).send("logout success.");
-  });
+exports.logout = async (req, res) => {
+  try {
+    const token = req?.headers?.authorization?.split(" ")?.[1];
+    if (token) {
+      await Token.deleteOne({ token });
+    }
+    return res.status(200).json({ isSuccess: true, message: "Logout successfully." });
+  } catch (error) {
+    return res.status(500).json({ isSuccess: false, message: "Logout Fail", error });
+  }
 };
