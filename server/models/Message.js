@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const mongoosePaginate = require("mongoose-paginate-v2");
 
 const messageSchema = new mongoose.Schema({
   conversation: { 
@@ -20,4 +21,5 @@ const messageSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+messageSchema.plugin(mongoosePaginate);
 module.exports = mongoose.model('Message', messageSchema);

@@ -106,7 +106,7 @@ const sendMessage = async (conversationId, senderId, content, type = 'text') => 
   }
 };
 
-const getConversationMessages = async (conversationId, userId) => {
+const getConversationMessages = async (conversationId, userId, page = 1, limit = 20) => {
   const conversation = await Conversation.findOne({
     _id: conversationId,
     $or: [{ user: userId }, { admin: userId }],
@@ -116,11 +116,25 @@ const getConversationMessages = async (conversationId, userId) => {
   const senderToMark = userId.toString() === conversation.admin?.toString() ? conversation.user : conversation.admin;
   const recipient = userId.toString() === conversation.admin?.toString() ? 'admin' : 'user';
 
-  await Message.updateMany({ conversation: conversationId, sender: senderToMark, read: false }, { $set: { read: true } });
+  await Message.updateMany(
+    { conversation: conversationId, sender: senderToMark, read: false },
+    { $set: { read: true } }
+  );
+
   await Conversation.findByIdAndUpdate(conversationId, { $set: { [`unreadCount.${recipient}`]: 0 } });
 
-  return await Message.find({ conversation: conversationId }).populate('sender', 'name role').sort('createdAt');
+  const options = {
+    page,
+    limit,
+    sort: { createdAt: 1 }, 
+    populate: { path: 'sender', select: 'name role' },
+  };
+
+  const paginatedResult = await Message.paginate({ conversation: conversationId }, options);
+
+  return paginatedResult; 
 };
+
 
 const getAdminConversations = async (adminId) => {
   return await Conversation.find({
@@ -150,12 +164,29 @@ const getOrCreateConversationHandler = async (req, res) => {
 
 const getUserConversationMessagesHandler = async (req, res) => {
   try {
+    const { page = 1, limit = 20 } = req.query; 
     const conversation = await getOrCreateConversation(req.user._id);
-    const messages = await getConversationMessages(conversation._id, req.user._id);
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const options = {
+      page: pageNum,
+      limit: limitNum,
+      sort: { createdAt: 1 },
+      populate: { path: 'sender', select: 'name role' },
+    };
+    const paginatedResult = await Message.paginate({ conversation: conversation._id }, options);
+    // Mark messages as read and reset unread count as before
+    const senderToMark = req.user._id.toString() === conversation.admin?.toString() ? conversation.user : conversation.admin;
+    const recipient = req.user._id.toString() === conversation.admin?.toString() ? 'admin' : 'user';
+    await Message.updateMany(
+      { conversation: conversation._id, sender: senderToMark, read: false },
+      { $set: { read: true } }
+    );
+    await Conversation.findByIdAndUpdate(conversation._id, { $set: { [`unreadCount.${recipient}`]: 0 } });
     return res.status(200).json({
       isSuccess: true,
-      message: 'Messages reterived successfully',
-      data: messages,
+      message: 'Messages retrieved successfully.',
+      data: paginatedResult, 
     });
   } catch (err) {
     return res.status(400).json({
@@ -164,6 +195,7 @@ const getUserConversationMessagesHandler = async (req, res) => {
     });
   }
 };
+
 
 const sendUserMessageHandler = async (req, res) => {
   try {
@@ -190,10 +222,24 @@ const sendUserMessageHandler = async (req, res) => {
 
 const getAdminConversationsHandler = async (req, res) => {
   try {
-    const conversations = await getAdminConversations(req.user._id);
+    const { page = 1, limit = 20 } = req.query;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const options = {
+      page: pageNum,
+      limit: limitNum,
+      sort: { updatedAt: -1 },
+      populate: [
+        { path: 'user', select: 'name online' },
+        { path: 'lastMessage' }
+      ]
+    };
+    const conversations = await Conversation.paginate({
+      $or: [{ admin: req.user._id }, { admin: null }]
+    }, options);
     return res.status(200).json({
       isSuccess: true,
-      message: 'Admin conversations reterived successfully.',
+      message: 'Admin conversations retrieved successfully.',
       data: conversations,
     });
   } catch (err) {
@@ -206,11 +252,30 @@ const getAdminConversationsHandler = async (req, res) => {
 
 const getAdminMessagesHandler = async (req, res) => {
   try {
-    const messages = await getConversationMessages(req.params.conversationId, req.user._id);
+    const { page = 1, limit = 20 } = req.query;
+    const conversationId = req.params.conversationId;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const options = {
+      page: pageNum,
+      limit: limitNum,
+      sort: { createdAt: 1 },
+      populate: { path: 'sender', select: 'name role' },
+    };
+    const paginatedResult = await Message.paginate({ conversation: conversationId }, options);
+    // Mark messages as read and reset unread count as before
+    const conversation = await Conversation.findById(conversationId);
+    const senderToMark = req.user._id.toString() === conversation.admin?.toString() ? conversation.user : conversation.admin;
+    const recipient = req.user._id.toString() === conversation.admin?.toString() ? 'admin' : 'user';
+    await Message.updateMany(
+      { conversation: conversationId, sender: senderToMark, read: false },
+      { $set: { read: true } }
+    );
+    await Conversation.findByIdAndUpdate(conversationId, { $set: { [`unreadCount.${recipient}`]: 0 } });
     return res.status(200).json({
       isSuccess: true,
-      message: 'Messages reterived successfully.',
-      data: messages,
+      message: 'Messages retrieved successfully.',
+      data: paginatedResult,
     });
   } catch (err) {
     return res.status(400).json({
@@ -219,6 +284,7 @@ const getAdminMessagesHandler = async (req, res) => {
     });
   }
 };
+
 
 const sendAdminMessageHandler = async (req, res) => {
   try {
