@@ -346,7 +346,7 @@ const deleteMessageHandler = async (req, res) => {
   }
 };
 
-const broadcastMessageFromAdmin = async (adminId, content) => {
+const broadcastMessageFromAdmin = async (adminId, content, io) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -363,6 +363,11 @@ const broadcastMessageFromAdmin = async (adminId, content) => {
         content,
         type: 'text',
       });
+
+      const user = await User.findById(convo.user)
+      if(user.socketId){
+        io.to(user.socketId).emit("receive_message", message)
+      }
 
       await message.save({ session });
       convo.lastMessage = message._id;
@@ -385,7 +390,8 @@ const broadcastMessageFromAdmin = async (adminId, content) => {
 const broadcastMessageHandler = async (req, res) => {
   try {
     const { content } = req.body;
-    const messages = await broadcastMessageFromAdmin(req.user._id, content);
+    const io = req.app.get("io")
+    const messages = await broadcastMessageFromAdmin(req.user._id, content,io);
     return res.status(201).json({
       isSuccess: true,
       message: 'Broadcast message sent to all conversations.',

@@ -16,7 +16,6 @@ const createToken = (user) => {
   );
 };
 
-
 exports.register = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {

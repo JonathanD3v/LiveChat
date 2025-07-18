@@ -11,6 +11,7 @@ const messageController = require("./controllers/message");
 
 const authRoutes = require("./routes/auth");
 const messageRoutes = require('./routes/chat');
+const User = require("./models/User")
 
 const app = express();
 const server = http.createServer(app);
@@ -58,8 +59,14 @@ mongoose
   });
 
 // Socket.IO Logic
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   console.log("Client connected!");
+
+  const userId = socket.user.userId
+  await User.findByIdAndUpdate(userId,{
+    online:true,
+    socketId:socket.id
+  })
 
   socket.on("join_conversation", ({conversationId})=>{
     socket.join(conversationId)
@@ -96,6 +103,14 @@ io.on("connection", (socket) => {
       }, 1000);
     }
   });
+
+  socket.on("disconnect", async ()=>{
+    await User.findByIdAndUpdate(userId, {
+      online:false,
+      socketId:null,
+      lastSeen:new Date()
+    })
+  })
 });
 
 app.set("io", io);
