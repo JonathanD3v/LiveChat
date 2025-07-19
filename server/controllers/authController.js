@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Token = require("../models/UserToken");
 require("dotenv").config()
+// const { encrypt } = require("../utils/cryptoUtil");
 
 const createToken = (user) => {
   return jwt.sign(
@@ -16,14 +17,19 @@ const createToken = (user) => {
   );
 };
 
-exports.register = async (req, res) => {
+const handleValidation = (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({ isSuccess: false, message: errors.array()[0].msg });
+    res.status(400).json({ isSuccess: false, message: errors.array()[0].msg });
+    return false;
   }
+  return true;
+};
 
+
+exports.register = async (req, res) => {
+  if (!handleValidation(req, res)) return;
   const { name, phone, password } = req.body;
-
   try {
     const existingUser = await User.findOne({ $or: [{ name }, { phone }] });
 
@@ -47,10 +53,7 @@ exports.register = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ isSuccess: false, message: errors.array()[0].msg });
-  }
+  if (!handleValidation(req, res)) return;
 
   const { name, password } = req.body;
 
@@ -69,7 +72,23 @@ exports.login = async (req, res) => {
 
     await Token.create({userId:user._id, token})
 
-
+    // for data encrypt
+    // const responseData = {
+    //   name: user.name,
+    //   phone: user.phone,
+    //   user_role: user.role,
+    //   id: user._id
+    // };
+    
+    // const encryptedData = encrypt(JSON.stringify(responseData));
+    
+    // return res.status(200).json({
+    //   isSuccess: true,
+    //   message: "Login successful.",
+    //   token,
+    //   data: encryptedData
+    // });
+    
     return res.status(200).json({
       isSuccess: true,
       message: "Login successful.",
@@ -87,10 +106,12 @@ exports.login = async (req, res) => {
 };
 
 exports.adminLogin = async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ isSuccess: false, message: errors.array()[0].msg });
-  }
+  if (!handleValidation(req, res)) return;
+  
+  // const errors = validationResult(req);
+  // if (!errors.isEmpty()) {
+  //   return res.status(400).json({ isSuccess: false, message: errors.array()[0].msg });
+  // }
 
   const { name, password } = req.body;
 

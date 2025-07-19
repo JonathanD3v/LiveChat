@@ -36,11 +36,11 @@ exports.loginValidation = [
   body("name")
     .trim()
     .notEmpty()
-    .withMessage("Name must have!")
+    .withMessage("Please enter name!")
     .isLength({ min: 3 })
     .withMessage("Name must have at least three characters!"),
   body("password")
     .trim()
     .notEmpty()
-    .withMessage("Password must have!"),
+    .withMessage("Please enter password!"),
 ];
