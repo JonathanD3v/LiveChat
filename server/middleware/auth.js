@@ -20,7 +20,7 @@ module.exports = async (req, res, next) => {
     req.user = {
       _id: decryptedTokenDetails.userId,
       role: decryptedTokenDetails.role,
-      // app_name_id: decoded.app_name_id || user.app_name_id || null,
+      app_name_id: decryptedTokenDetails.app_name_id,
     };
 
     next();

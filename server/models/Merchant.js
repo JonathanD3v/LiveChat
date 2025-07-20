@@ -10,16 +10,16 @@ const merchantSchema = new mongoose.Schema(
         unique: true,
       },
     app_name_id: {
-      type: Number,
+      type: String,
       unique: true,
       required: true,
-      default: () => crypto.randomBytes(2).toString("hex"),
+      default: () => crypto.randomBytes(6).toString("hex"),
     },
     app_secret_key: {
       type: String,
       unique: true,
       required: true,
-      default: () => crypto.randomBytes(6).toString("hex"),
+      default: () => crypto.randomBytes(32).toString("hex"),
     },
     status: {
       type: String,

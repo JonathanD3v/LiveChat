@@ -8,6 +8,9 @@ const getOrCreateConversation = async (userId) => {
   session.startTransaction();
 
   try {
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found');
+
     let conversation = await Conversation.findOne({ user: userId })
       .populate('user', 'name role')
       .populate('admin', 'name role')
@@ -18,10 +21,15 @@ const getOrCreateConversation = async (userId) => {
       return conversation;
     }
 
-    const admin = await User.findOne({ role: 'admin' });
-    if (!admin) throw new Error('No admin available');
+    const admin = await User.findOne({ role: 'admin', app_name_id: user.app_name_id });
+    if (!admin) throw new Error('No admin available for this user\'s app');
 
-    conversation = new Conversation({ user: userId, admin: admin._id });
+    conversation = new Conversation({
+      user: userId,
+      admin: admin._id,
+      app_name_id: user.app_name_id, // ✅ Only add for admin-user chats
+    });
+
     await conversation.save({ session });
     await session.commitTransaction();
     session.endSession();
@@ -32,6 +40,7 @@ const getOrCreateConversation = async (userId) => {
     throw error;
   }
 };
+
 
 const sendMessage = async (conversationId, senderId, content, type = 'text') => {
   const session = await mongoose.startSession();
@@ -54,6 +63,15 @@ const sendMessage = async (conversationId, senderId, content, type = 'text') => 
     const conversation = await Conversation.findById(conversationId).session(session);
     if (!conversation) throw new Error('Conversation not found');
 
+    if (conversation.admin && conversation.user) {
+      const adminUser = await User.findById(senderId);
+      if (adminUser.role === 'admin') {
+        if (conversation.app_name_id !== adminUser.app_name_id) {
+          throw new Error('Unauthorized: Cross-app messaging is not allowed.');
+        }
+      }
+    }
+    
     const allowedIds = [conversation.user.toString(), conversation.admin?.toString()];
     if (!allowedIds.includes(senderId.toString())) throw new Error('Unauthorized sender');
 
@@ -138,14 +156,16 @@ const getConversationMessages = async (conversationId, userId, page = 1, limit =
 
 
 
-const getAdminConversations = async (adminId) => {
+const getAdminConversations = async (adminId, app_name_id) => {
   return await Conversation.find({
-    $or: [{ admin: adminId }, { admin: null }],
+    admin: adminId,
+    app_name_id: app_name_id, // ✅ Filter by app_name_id
   })
     .populate('user', 'name online')
     .populate('lastMessage')
     .sort('-updatedAt');
 };
+
 
 
 const getOrCreateConversationHandler = async (req, res) => {
@@ -219,18 +239,25 @@ const getAdminConversationsHandler = async (req, res) => {
     const { page = 1, limit = 20 } = req.query;
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
+
     const options = {
       page: pageNum,
       limit: limitNum,
       sort: { updatedAt: -1 },
       populate: [
         { path: 'user', select: 'name online' },
-        { path: 'lastMessage' }
-      ]
+        { path: 'lastMessage' },
+      ],
     };
-    const conversations = await Conversation.paginate({
-      $or: [{ admin: req.user._id }, { admin: null }]
-    }, options);
+
+    const conversations = await Conversation.paginate(
+      {
+        admin: req.user._id,
+        app_name_id: req.user.app_name_id, // ✅ Filter by admin's app_name_id
+      },
+      options
+    );
+
     return res.status(200).json({
       isSuccess: true,
       message: 'Admin conversations retrieved successfully.',
@@ -243,6 +270,7 @@ const getAdminConversationsHandler = async (req, res) => {
     });
   }
 };
+
 
 const getAdminMessagesHandler = async (req, res) => {
   try {

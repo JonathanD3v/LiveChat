@@ -8,7 +8,8 @@ const createToken = (user) => {
     return jwt.sign(
       {
         userId: user._id,
-        role: user.role
+        role: user.role,
+        app_name_id: user.app_name_id,
       },
       process.env.JWT_KEY,
       { expiresIn: "7d" }
@@ -34,7 +35,7 @@ try {
           phone: user.phone,
           app_name_id,
           password: "merchant_pass",
-          role: "user"
+          role:  user.role || "user",
         });
       }
 
@@ -48,6 +49,7 @@ try {
           id: existingUser._id,
           name: existingUser.name,
           phone: existingUser.phone,
+          role: existingUser.role,
           app_name_id,
         }
       });
