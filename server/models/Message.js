@@ -21,5 +21,19 @@ const messageSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+const moment = require("moment-timezone");
+messageSchema.pre("save", function (next) {
+  const now = moment().tz("Asia/Yangon").format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
+  this.createdAt = now;
+  this.updatedAt = now;
+  next();
+});
+
+messageSchema.pre("update", function (next) {
+  const now = moment().tz("Asia/Yangon").format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
+  this.updatedAt = now;
+  next();
+});
+
 messageSchema.plugin(mongoosePaginate);
 module.exports = mongoose.model('Message', messageSchema);

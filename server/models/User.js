@@ -18,7 +18,7 @@ const userSchema = new Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "user", "bot"],
+      enum: ["admin", "user", "bot", "developer"],
       default: "user",
     },
     online: { type: Boolean, default: false },
@@ -26,6 +26,10 @@ const userSchema = new Schema(
     lastSeen: { type: Date },
     resetToken: String,
     tokenExpiration: Date,
+    app_name_id: {
+      type: Number,
+      default: null,
+    },
   },
   {
     timestamps: true,

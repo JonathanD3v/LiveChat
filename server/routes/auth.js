@@ -15,6 +15,9 @@ router.get("/", (req, res) =>
 router.post("/register", registerValidation, authController.register);
 router.post("/login", loginValidation, authController.login);
 
+// dev
+router.post("/dev/login", loginValidation, authController.devLogin);
+
 // Admin login
 router.post("/admin/login", loginValidation, authController.adminLogin);
 router.post("/logout", authController.logout);

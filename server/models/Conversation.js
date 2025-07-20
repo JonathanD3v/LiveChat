@@ -24,8 +24,26 @@ const conversationSchema = new mongoose.Schema({
   lastMessage: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Message' 
-  }
+  },
+  app_name_id: {
+    type: Number,
+    default: null,
+  },
 }, { timestamps: true });
+
+const moment = require("moment-timezone");
+conversationSchema.pre("save", function (next) {
+  const now = moment().tz("Asia/Yangon").format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
+  this.createdAt = now;
+  this.updatedAt = now;
+  next();
+});
+
+conversationSchema.pre("update", function (next) {
+  const now = moment().tz("Asia/Yangon").format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
+  this.updatedAt = now;
+  next();
+});
 
 conversationSchema.plugin(mongoosePaginate);
 

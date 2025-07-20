@@ -9,9 +9,11 @@ const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 
 const Message = require("./models/Message");
-const messageController = require("./controllers/message");
+// const messageController = require("./controllers/message");
 const authRoutes = require("./routes/auth");
 const messageRoutes = require("./routes/chat");
+const merchantRoute = require("./routes/merchant");
+const integrationRoutes = require("./routes/integrationRoute");
 const User = require("./models/User");
 const redis = require("./utils/redisClient");
 
@@ -33,6 +35,9 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use("/api", authRoutes);
 app.use('/api', messageRoutes);
+app.use("/api/dev", merchantRoute)
+app.use("/api/integration", integrationRoutes);
+
 
 mongoose
   .connect(process.env.MONGO_URL, {

@@ -146,6 +146,47 @@ exports.adminLogin = async (req, res) => {
   }
 };
 
+exports.devLogin = async (req, res) => {
+  if (!handleValidation(req, res)) return;
+  
+  // const errors = validationResult(req);
+  // if (!errors.isEmpty()) {
+  //   return res.status(400).json({ isSuccess: false, message: errors.array()[0].msg });
+  // }
+
+  const { name, password } = req.body;
+
+  try {
+    const dev = await User.findOne({ name });
+    if (!dev || dev.role !== "developer") {
+      throw new Error("Unauthorized: dev access only.");
+    }
+
+    const isMatch = await bcrypt.compare(password, dev.password);
+    if (!isMatch) throw new Error("Invalid password.");
+
+    await Token.deleteMany({userId:dev._id})
+
+    const token = jwt.sign({ userId: dev._id, role: dev.role }, process.env.JWT_KEY, { expiresIn: "7d" });
+
+    await Token.create({userId:dev._id, token})
+
+    return res.status(200).json({
+      isSuccess: true,
+      message: "Login successful.",
+      token,
+      data: {
+        name: dev.name,
+        phone: dev.phone,
+        user_role: dev.role,
+        id: dev._id
+      }
+    });
+  } catch (error) {
+    return res.status(401).json({ isSuccess: false, message: error.message });
+  }
+};
+
 exports.logout = async (req, res) => {
   try {
     const token = req?.headers?.authorization?.split(" ")?.[1];
