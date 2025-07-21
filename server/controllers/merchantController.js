@@ -9,7 +9,7 @@ exports.createMerchant = async (req, res)=>{
             return res.status(400).json({isSuccess:false, message: "Merchant Name Is Required!"})
         }
 
-        const app_name_id = crypto.randomBytes(4).toString("hex");
+        const app_name_id = Math.floor(100000 + Math.random() * 900000);
         const app_secret_key = crypto.randomBytes(16).toString("hex");
 
         const existingMerchant = await Merchant.findOne({name});

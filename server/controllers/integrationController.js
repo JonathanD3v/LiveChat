@@ -2,6 +2,7 @@ const Merchant = require("../models/Merchant")
 const User = require("../models/User")
 const Token = require("../models/UserToken")
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt")
 require("dotenv").config()
 
 const createToken = (user) => {
@@ -30,11 +31,12 @@ try {
 
       let existingUser = await User.findOne({name:user.name})
       if (!existingUser) {
+        const hashedPassword = await bcrypt.hash("merchant_pass", 10)
         existingUser = await User.create({
           name: user.name,
           phone: user.phone,
           app_name_id,
-          password: "merchant_pass",
+          password: hashedPassword,
           role:  user.role || "user",
         });
       }

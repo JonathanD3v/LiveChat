@@ -1,4 +1,4 @@
-const { default: mongoose, mongo } = require('mongoose');
+const { default: mongoose } = require('mongoose');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const User = require('../models/User');
@@ -9,7 +9,7 @@ const getOrCreateConversation = async (userId) => {
 
   try {
     const user = await User.findById(userId);
-    if (!user) throw new Error('User not found');
+    if (!user) throw new Error("User not found");
 
     let conversation = await Conversation.findOne({ user: userId })
       .populate('user', 'name role')
@@ -17,24 +17,31 @@ const getOrCreateConversation = async (userId) => {
       .session(session);
 
     if (conversation) {
+      const adminStillExists = await User.findOne({ _id: conversation.admin, role: 'admin' });
+      if (!adminStillExists) {
+        throw new Error("Admin is no longer available for this conversation.");
+      }
+
       await session.endSession();
       return conversation;
     }
 
     const admin = await User.findOne({ role: 'admin', app_name_id: user.app_name_id });
-    if (!admin) throw new Error('No admin available for this user\'s app');
+    if (!admin) throw new Error("No admin is available for this merchant at the moment. Please try again later.");
 
     conversation = new Conversation({
       user: userId,
       admin: admin._id,
-      app_name_id: user.app_name_id, // ✅ Only add for admin-user chats
+      app_name_id: user.app_name_id,
     });
 
     await conversation.save({ session });
     await session.commitTransaction();
     session.endSession();
+
     return conversation.populate('user admin');
   } catch (error) {
+    console.error("Error in getOrCreateConversation:", error.message);
     await session.abortTransaction();
     session.endSession();
     throw error;

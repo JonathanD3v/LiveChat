@@ -10,10 +10,9 @@ const merchantSchema = new mongoose.Schema(
         unique: true,
       },
     app_name_id: {
-      type: String,
+      type: Number,
       unique: true,
       required: true,
-      default: () => crypto.randomBytes(4).toString("hex"),
     },
     app_secret_key: {
       type: String,
@@ -31,16 +30,21 @@ const merchantSchema = new mongoose.Schema(
 );
 
 merchantSchema.pre("save", function (next) {
-  const now = moment().tz("Asia/Yangon").format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
-  this.createdAt = now;
-  this.updatedAt = now;
-  next();
-});
-
-merchantSchema.pre("update", function (next) {
-  const now = moment().tz("Asia/Yangon").format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
-  this.updatedAt = now;
-  next();
-});
+    const now = moment().tz("Asia/Yangon").format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
+    this.createdAt = now;
+    this.updatedAt = now;
+  
+    if (!this.app_name_id) {
+      this.app_name_id = Math.floor(100000 + Math.random() * 900000);
+    }
+  
+    next();
+  });
+  
+  merchantSchema.pre("update", function (next) {
+    const now = moment().tz("Asia/Yangon").format("YYYY-MM-DDTHH:mm:ss.SSS[Z]");
+    this.updatedAt = now;
+    next();
+  });
 
 module.exports = mongoose.model("Merchant", merchantSchema);
