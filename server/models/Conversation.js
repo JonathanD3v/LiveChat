@@ -29,6 +29,7 @@ const conversationSchema = new mongoose.Schema({
     type: Number,
     default: null,
   },
+  participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, { timestamps: true });
 
 const moment = require("moment-timezone");

@@ -16,6 +16,8 @@ const merchantRoute = require("./routes/merchant");
 const integrationRoutes = require("./routes/integrationRoute");
 const User = require("./models/User");
 const redis = require("./utils/redisClient");
+const Conversation = require("./models/Conversation");
+
 
 const app = express();
 const server = http.createServer(app);
@@ -47,14 +49,29 @@ mongoose
   .then(() => console.log("Connected to database"))
   .catch((error) => console.error("Database connection error:", error));
 
+  const getOtherParticipants = async (conversationId, senderId) => {
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) return [];
+    const ids = [];
+    if (conversation.user && conversation.user.toString() !== senderId.toString()) {
+      ids.push(conversation.user.toString());
+    }
+    if (conversation.admin && conversation.admin.toString() !== senderId.toString()) {
+      ids.push(conversation.admin.toString());
+    }
+    return ids;
+  };
+
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
+  // console.log("token, ", token)
   if (!token) return next(new Error("Authentication error"));
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_KEY);
     socket.user = decoded;
     next();
   } catch (err) {
+    console.error("jwt, ", err.message)
     next(new Error("Authentication error"));
   }
 });
@@ -67,6 +84,7 @@ io.on("connection", async (socket) => {
   await User.findByIdAndUpdate(userId, { online: true, socketId: socket.id });
   await redis.set(`user_online:${userId}`, "true");
   await redis.expire(`user_online:${userId}`, 60);
+  io.emit("user_online", userId);
 
   // keep-alive every 30 sec
   const keepAliveInterval = setInterval(async () => {
@@ -95,24 +113,25 @@ io.on("connection", async (socket) => {
   socket.on("send_message", async (data) => {
     const messageId = uuidv4();
     const redisKey = `message_buffer:${messageId}`;
-    await redis.set(redisKey, JSON.stringify(data), { EX: 300 }); // temporary store
-
+    await redis.set(redisKey, JSON.stringify(data), { EX: 300 });
     const message = await Message.create({
       conversation: data.conversationId,
       sender: data.senderId,
       content: data.content,
       type: data.type || "text",
+      
     });
 
-    // emit message to room
+    console.log(`Emitting to room: ${data.conversationId}`, message);
     io.to(data.conversationId).emit("receive_message", message);
 
     // Cache last 10 messages
     const recentKey = `recent_messages:${data.conversationId}`;
-    await redis.lpush(recentKey, JSON.stringify(message));
-    await redis.ltrim(recentKey, 0, 9); // keep only last 10
+    await redis.lPush(recentKey, JSON.stringify(message));
+    await redis.lTrim(recentKey, 0, 9); // keep only last 10
 
     const receiverIds = await getOtherParticipants(data.conversationId, data.senderId); 
+    console.log('Receivers:', receiverIds);
     for (const receiverId of receiverIds) {
       const unreadKey = `unread_count:${receiverId}:${data.conversationId}`;
       await redis.incr(unreadKey);
@@ -130,8 +149,8 @@ io.on("connection", async (socket) => {
         });
         io.to(data.conversationId).emit("receive_message", welcomeMessage);
 
-        await redis.lpush(recentKey, JSON.stringify(welcomeMessage));
-        await redis.ltrim(recentKey, 0, 9);
+        await redis.lPush(recentKey, JSON.stringify(welcomeMessage));
+        await redis.lTrim(recentKey, 0, 9);
       }, 1000);
     }
   });
@@ -145,6 +164,7 @@ io.on("connection", async (socket) => {
       socketId: null,
       lastSeen: new Date(),
     });
+    io.emit("user_offline", userId);
   });
 });
 
