@@ -14,6 +14,7 @@ router.post('/message', authMiddleware, upload.single('image'), chatController.s
 router.get('/admin/conversations', authMiddleware,isAdmin, chatController.getAdminConversationsHandler);
 router.get('/admin/conversations/:conversationId/messages', authMiddleware,isAdmin, chatController.getAdminMessagesHandler);
 router.post('/admin/conversations/:conversationId/message', authMiddleware,isAdmin, upload.single('image'), chatController.sendAdminMessageHandler);
+router.delete('/admin/messages/:messageId', authMiddleware, isAdmin, chatController.adminDeleteMessageHandler);
 router.post('/admin/broadcast-message', authMiddleware, isAdmin, chatController.broadcastMessageHandler);
 
 module.exports = router;
