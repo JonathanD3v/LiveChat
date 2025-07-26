@@ -1,7 +1,7 @@
-const { default: mongoose } = require('mongoose');
-const Conversation = require('../models/Conversation');
-const Message = require('../models/Message');
-const User = require('../models/User');
+const { default: mongoose } = require("mongoose");
+const Conversation = require("../models/Conversation");
+const Message = require("../models/Message");
+const User = require("../models/User");
 
 const getOrCreateConversation = async (userId) => {
   const session = await mongoose.startSession();
@@ -14,13 +14,17 @@ const getOrCreateConversation = async (userId) => {
     if (!user) throw new Error("User not found");
 
     let conversation = await Conversation.findOne({ user: userId })
-      .populate('user', 'name role')
-      .populate('admin', 'name role')
+      .populate("user", "name role")
+      .populate("admin", "name role")
       .session(session);
 
     if (conversation) {
-      const adminStillExists = await User.findOne({ _id: conversation.admin, role: 'admin' });
-      if (!adminStillExists) throw new Error("Admin is no longer available for this conversation.");
+      const adminStillExists = await User.findOne({
+        _id: conversation.admin,
+        role: "admin",
+      });
+      if (!adminStillExists)
+        throw new Error("Admin is no longer available for this conversation.");
 
       await session.commitTransaction();
       committed = true;
@@ -28,8 +32,12 @@ const getOrCreateConversation = async (userId) => {
       return conversation;
     }
 
-    const admin = await User.findOne({ role: 'admin', app_name_id: user.app_name_id });
-    if (!admin) throw new Error("No admin is available for this merchant at the moment.");
+    const admin = await User.findOne({
+      role: "admin",
+      app_name_id: user.app_name_id,
+    });
+    if (!admin)
+      throw new Error("No admin is available for this merchant at the moment.");
 
     conversation = new Conversation({
       user: userId,
@@ -43,7 +51,7 @@ const getOrCreateConversation = async (userId) => {
     committed = true;
     session.endSession();
 
-    return conversation.populate('user admin');
+    return conversation.populate("user admin");
   } catch (error) {
     if (!committed) await session.abortTransaction();
     session.endSession();
@@ -51,34 +59,57 @@ const getOrCreateConversation = async (userId) => {
   }
 };
 
-const sendMessage = async (conversationId, senderId, content, type = 'text', io) => {
+const sendMessage = async (
+  conversationId,
+  senderId,
+  content,
+  type = "text",
+  io
+) => {
   const session = await mongoose.startSession();
   let committed = false;
 
   try {
     session.startTransaction();
 
-    if (type === 'text' && (!content || content.length > 500)) {
-      throw new Error('Text message must be between 1 and 500 characters.');
+    console.log("sendMessage called with:", {
+      conversationId,
+      senderId,
+      content,
+      type,
+    });
+    if (type === "text" && (!content || content.length > 500)) {
+      throw new Error("Text message must be between 1 and 500 characters.");
     }
 
-    if (type === 'image' && (!content || !content.match(/\.(jpeg|jpg|png|gif|webp)$/i))) {
-      throw new Error('Invalid image format.');
+    if (
+      type === "image" &&
+      (!content || !content.match(/\.(jpeg|jpg|png|gif|webp)$/i))
+    ) {
+      throw new Error("Invalid image format.");
     }
 
-    const conversation = await Conversation.findById(conversationId).session(session);
-    if (!conversation) throw new Error('Conversation not found');
+    const conversation = await Conversation.findById(conversationId).session(
+      session
+    );
+    if (!conversation) throw new Error("Conversation not found");
 
-    const allowedIds = [conversation.user.toString(), conversation.admin?.toString()];
-    if (!allowedIds.includes(senderId.toString())) throw new Error('Unauthorized sender');
+    const allowedIds = [
+      conversation.user.toString(),
+      conversation.admin?.toString(),
+    ];
+    if (!allowedIds.includes(senderId.toString()))
+      throw new Error("Unauthorized sender");
 
     const message = await Message.create(
-      [{
-        conversation: conversationId,
-        sender: senderId,
-        content,
-        type,
-      }],
+      [
+        {
+          conversation: conversationId,
+          sender: senderId,
+          content,
+          type,
+        },
+      ],
       { session }
     );
 
@@ -90,7 +121,8 @@ const sendMessage = async (conversationId, senderId, content, type = 'text', io)
       read: false,
     }).session(session);
 
-    const recipientField = senderId.toString() === conversation.user.toString() ? 'admin' : 'user';
+    const recipientField =
+      senderId.toString() === conversation.user.toString() ? "admin" : "user";
 
     await Conversation.findByIdAndUpdate(
       conversationId,
@@ -106,15 +138,16 @@ const sendMessage = async (conversationId, senderId, content, type = 'text', io)
     session.endSession();
 
     const populatedMessage = await Message.populate(msg, {
-      path: 'sender',
-      select: 'name role',
+      path: "sender",
+      select: "name role",
     });
 
     if (io) {
-      const receiverId = recipientField === 'admin' ? conversation.admin : conversation.user;
+      const receiverId =
+        recipientField === "admin" ? conversation.admin : conversation.user;
       const recipient = await User.findById(receiverId);
       if (recipient?.socketId) {
-        io.to(recipient.socketId).emit('receive_message', populatedMessage);
+        io.to(recipient.socketId).emit("receive_message", populatedMessage);
       }
     }
 
@@ -126,29 +159,40 @@ const sendMessage = async (conversationId, senderId, content, type = 'text', io)
   }
 };
 
-const getConversationMessages = async (conversationId, userId, page = 1, limit = 10) => {
+const getConversationMessages = async (
+  conversationId,
+  userId,
+  page = 1,
+  limit = 10
+) => {
   const conversation = await Conversation.findOne({
     _id: conversationId,
     $or: [{ user: userId }, { admin: userId }],
   });
 
-  if (!conversation) throw new Error('Conversation not found or unauthorized');
+  if (!conversation) throw new Error("Conversation not found or unauthorized");
 
-  const senderToMark = userId.toString() === conversation.admin?.toString() ? conversation.user : conversation.admin;
-  const recipient = userId.toString() === conversation.admin?.toString() ? 'admin' : 'user';
+  const senderToMark =
+    userId.toString() === conversation.admin?.toString()
+      ? conversation.user
+      : conversation.admin;
+  const recipient =
+    userId.toString() === conversation.admin?.toString() ? "admin" : "user";
 
   await Message.updateMany(
     { conversation: conversationId, sender: senderToMark, read: false },
     { $set: { read: true } }
   );
 
-  await Conversation.findByIdAndUpdate(conversationId, { $set: { [`unreadCount.${recipient}`]: 0 } });
+  await Conversation.findByIdAndUpdate(conversationId, {
+    $set: { [`unreadCount.${recipient}`]: 0 },
+  });
 
   const options = {
     page,
     limit,
     sort: { _id: -1 },
-    populate: { path: 'sender', select: 'name role' },
+    populate: { path: "sender", select: "name role" },
   };
 
   return await Message.paginate({ conversation: conversationId }, options);
@@ -159,9 +203,9 @@ const getAdminConversations = async (adminId, app_name_id) => {
     admin: adminId,
     app_name_id,
   })
-    .populate('user', 'name online')
-    .populate('lastMessage')
-    .sort('-updatedAt');
+    .populate("user", "name online")
+    .populate("lastMessage")
+    .sort("-updatedAt");
 };
 
 const adminDeleteMessage = async (messageId, userId) => {
@@ -172,14 +216,16 @@ const adminDeleteMessage = async (messageId, userId) => {
     session.startTransaction();
 
     const message = await Message.findById(messageId).session(session);
-    if (!message) throw new Error('Message not found!');
+    if (!message) throw new Error("Message not found!");
 
-    const conversation = await Conversation.findById(message.conversation).session(session);
-    if (!conversation) throw new Error('Conversation not found');
+    const conversation = await Conversation.findById(
+      message.conversation
+    ).session(session);
+    if (!conversation) throw new Error("Conversation not found");
 
     // 🔒 Only admin can delete messages
     if (conversation.admin.toString() !== userId.toString()) {
-      throw new Error('Only admin can delete messages');
+      throw new Error("Only admin can delete messages");
     }
 
     await message.deleteOne({ session });
@@ -187,7 +233,9 @@ const adminDeleteMessage = async (messageId, userId) => {
     if (conversation.lastMessage?.toString() === messageId) {
       const previous = await Message.findOne({
         conversation: message.conversation,
-      }).sort({ createdAt: -1 }).session(session);
+      })
+        .sort({ createdAt: -1 })
+        .session(session);
 
       conversation.lastMessage = previous ? previous._id : null;
       await conversation.save({ session });
@@ -204,7 +252,6 @@ const adminDeleteMessage = async (messageId, userId) => {
     throw error;
   }
 };
-
 
 const broadcastMessageFromAdmin = async (adminId, content, io) => {
   const session = await mongoose.startSession();
@@ -224,7 +271,7 @@ const broadcastMessageFromAdmin = async (adminId, content, io) => {
         conversation: convo._id,
         sender: adminId,
         content,
-        type: 'text',
+        type: "text",
       });
 
       await message.save({ session });
@@ -253,13 +300,12 @@ const broadcastMessageFromAdmin = async (adminId, content, io) => {
   }
 };
 
-
 const getOrCreateConversationHandler = async (req, res) => {
   try {
     const conversation = await getOrCreateConversation(req.user._id);
     return res.status(200).json({
       isSuccess: true,
-      message: 'User conversation retrieved successfully',
+      message: "User conversation retrieved successfully",
       data: conversation,
     });
   } catch (err) {
@@ -281,7 +327,7 @@ const getUserConversationMessagesHandler = async (req, res) => {
 
     return res.status(200).json({
       isSuccess: true,
-      message: 'Messages retrieved successfully.',
+      message: "Messages retrieved successfully.",
       data: paginatedResult,
     });
   } catch (err) {
@@ -291,19 +337,25 @@ const getUserConversationMessagesHandler = async (req, res) => {
 
 const sendUserMessageHandler = async (req, res) => {
   try {
-    const io = req.app.get('io');
+    const io = req.app.get("io");
     const conversation = await getOrCreateConversation(req.user._id);
-    let { type = 'text', content } = req.body;
+    let { type = "text", content } = req.body;
     if (req.file) {
-      type = 'image';
+      type = "image";
       content = `/uploads/${req.file.filename}`;
     }
 
-    const message = await sendMessage(conversation._id, req.user._id, content, type, io);
+    const message = await sendMessage(
+      conversation._id,
+      req.user._id,
+      content,
+      type,
+      io
+    );
 
     return res.status(201).json({
       isSuccess: true,
-      message: 'Message sent successfully.',
+      message: "Message sent successfully.",
       data: message,
     });
   } catch (err) {
@@ -320,8 +372,8 @@ const getAdminConversationsHandler = async (req, res) => {
       limit: parseInt(limit),
       sort: { updatedAt: -1 },
       populate: [
-        { path: 'user', select: 'name online' },
-        { path: 'lastMessage' },
+        { path: "user", select: "name online" },
+        { path: "lastMessage" },
       ],
     };
 
@@ -335,7 +387,7 @@ const getAdminConversationsHandler = async (req, res) => {
 
     return res.status(200).json({
       isSuccess: true,
-      message: 'Admin conversations retrieved successfully.',
+      message: "Admin conversations retrieved successfully.",
       data: conversations,
     });
   } catch (err) {
@@ -357,7 +409,7 @@ const getAdminMessagesHandler = async (req, res) => {
 
     return res.status(200).json({
       isSuccess: true,
-      message: 'Messages retrieved successfully.',
+      message: "Messages retrieved successfully.",
       data: paginatedResult,
     });
   } catch (err) {
@@ -367,17 +419,23 @@ const getAdminMessagesHandler = async (req, res) => {
 
 const sendAdminMessageHandler = async (req, res) => {
   try {
-    const io = req.app.get('io');
-    let { content, type = 'text' } = req.body;
+    const io = req.app.get("io");
+    let { content, type = "text" } = req.body;
     if (req.file) {
       content = `/uploads/${req.file.filename}`;
-      type = 'image';
+      type = "image";
     }
 
-    const message = await sendMessage(req.params.conversationId, req.user._id, content, type, io);
+    const message = await sendMessage(
+      req.params.conversationId,
+      req.user._id,
+      content,
+      type,
+      io
+    );
     return res.status(201).json({
       isSuccess: true,
-      message: 'Admin message sent successfully.',
+      message: "Admin message sent successfully.",
       data: message,
     });
   } catch (err) {
@@ -390,7 +448,7 @@ const adminDeleteMessageHandler = async (req, res) => {
     const result = await adminDeleteMessage(req.params.messageId, req.user._id);
     return res.status(200).json({
       isSuccess: true,
-      message: 'Message deleted successfully.',
+      message: "Message deleted successfully.",
       data: result,
     });
   } catch (err) {
@@ -405,7 +463,7 @@ const broadcastMessageHandler = async (req, res) => {
     const messages = await broadcastMessageFromAdmin(req.user._id, content, io);
     return res.status(201).json({
       isSuccess: true,
-      message: 'Broadcast message sent to all conversations.',
+      message: "Broadcast message sent to all conversations.",
       data: messages,
     });
   } catch (err) {

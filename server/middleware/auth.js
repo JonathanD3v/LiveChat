@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const Token = require("../models/UserToken")
+const Token = require("../models/UserToken");
 require("dotenv").config();
 
 module.exports = async (req, res, next) => {
@@ -12,7 +12,7 @@ module.exports = async (req, res, next) => {
 
     const decryptedTokenDetails = jwt.verify(token, process.env.JWT_KEY);
 
-    const tokenInDB = await Token.findOne({token})
+    const tokenInDB = await Token.findOne({ token });
     if (!tokenInDB) {
       throw new Error("Token invalid or expired. Please log in again.");
     }

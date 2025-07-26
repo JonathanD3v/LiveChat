@@ -6,11 +6,13 @@ exports.getOldMessage = async (req, res) => {
 
     const messages = await Message.find({ conversation: conversationId })
       .select("sender content createdAt")
-      .populate("sender", "name role") 
+      .populate("sender", "name role")
       .sort("createdAt");
 
     res.status(200).json(messages);
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch messages", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Failed to fetch messages", error: err.message });
   }
 };

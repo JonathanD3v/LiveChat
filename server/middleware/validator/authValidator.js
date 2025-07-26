@@ -16,10 +16,7 @@ exports.registerValidation = [
       }
       return true;
     }),
-  body("password")
-    .trim()
-    .notEmpty()
-    .withMessage("Please enter your password!"),
+  body("password").trim().notEmpty().withMessage("Please enter your password!"),
   body("confirm_password")
     .trim()
     .notEmpty()
@@ -39,8 +36,5 @@ exports.loginValidation = [
     .withMessage("Please enter name!")
     .isLength({ min: 3 })
     .withMessage("Name must have at least three characters!"),
-  body("password")
-    .trim()
-    .notEmpty()
-    .withMessage("Please enter password!"),
+  body("password").trim().notEmpty().withMessage("Please enter password!"),
 ];

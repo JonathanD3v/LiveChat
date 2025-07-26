@@ -3,14 +3,14 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Token = require("../models/UserToken");
-require("dotenv").config()
+require("dotenv").config();
 // const { encrypt } = require("../utils/cryptoUtil");
 
 const createToken = (user) => {
   return jwt.sign(
     {
       userId: user._id,
-      role: user.role
+      role: user.role,
     },
     process.env.JWT_KEY,
     { expiresIn: "7d" }
@@ -25,7 +25,6 @@ const handleValidation = (req, res) => {
   }
   return true;
 };
-
 
 exports.register = async (req, res) => {
   if (!handleValidation(req, res)) return;
@@ -45,7 +44,7 @@ exports.register = async (req, res) => {
     return res.status(201).json({
       isSuccess: true,
       message: "User registered successfully!",
-      data: { name, phone }
+      data: { name, phone },
     });
   } catch (error) {
     return res.status(500).json({ isSuccess: false, message: error.message });
@@ -66,11 +65,11 @@ exports.login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) throw new Error("Invalid password.");
 
-    await Token.deleteMany({userId:user._id})
+    await Token.deleteMany({ userId: user._id });
 
-    const token = createToken(user)
+    const token = createToken(user);
 
-    await Token.create({userId:user._id, token})
+    await Token.create({ userId: user._id, token });
 
     // for data encrypt
     // const responseData = {
@@ -79,16 +78,16 @@ exports.login = async (req, res) => {
     //   user_role: user.role,
     //   id: user._id
     // };
-    
+
     // const encryptedData = encrypt(JSON.stringify(responseData));
-    
+
     // return res.status(200).json({
     //   isSuccess: true,
     //   message: "Login successful.",
     //   token,
     //   data: encryptedData
     // });
-    
+
     return res.status(200).json({
       isSuccess: true,
       message: "Login successful.",
@@ -97,8 +96,8 @@ exports.login = async (req, res) => {
         name: user.name,
         phone: user.phone,
         user_role: user.role,
-        id: user._id
-      }
+        id: user._id,
+      },
     });
   } catch (error) {
     return res.status(401).json({ isSuccess: false, message: error.message });
@@ -107,7 +106,7 @@ exports.login = async (req, res) => {
 
 exports.adminLogin = async (req, res) => {
   if (!handleValidation(req, res)) return;
-  
+
   // const errors = validationResult(req);
   // if (!errors.isEmpty()) {
   //   return res.status(400).json({ isSuccess: false, message: errors.array()[0].msg });
@@ -124,11 +123,15 @@ exports.adminLogin = async (req, res) => {
     const isMatch = await bcrypt.compare(password, admin.password);
     if (!isMatch) throw new Error("Invalid password.");
 
-    await Token.deleteMany({userId:admin._id})
+    await Token.deleteMany({ userId: admin._id });
 
-    const token = jwt.sign({ userId: admin._id, role: admin.role }, process.env.JWT_KEY, { expiresIn: "7d" });
+    const token = jwt.sign(
+      { userId: admin._id, role: admin.role },
+      process.env.JWT_KEY,
+      { expiresIn: "7d" }
+    );
 
-    await Token.create({userId:admin._id, token})
+    await Token.create({ userId: admin._id, token });
 
     return res.status(200).json({
       isSuccess: true,
@@ -138,8 +141,8 @@ exports.adminLogin = async (req, res) => {
         name: admin.name,
         phone: admin.phone,
         user_role: admin.role,
-        id: admin._id
-      }
+        id: admin._id,
+      },
     });
   } catch (error) {
     return res.status(401).json({ isSuccess: false, message: error.message });
@@ -148,7 +151,7 @@ exports.adminLogin = async (req, res) => {
 
 exports.devLogin = async (req, res) => {
   if (!handleValidation(req, res)) return;
-  
+
   // const errors = validationResult(req);
   // if (!errors.isEmpty()) {
   //   return res.status(400).json({ isSuccess: false, message: errors.array()[0].msg });
@@ -165,11 +168,15 @@ exports.devLogin = async (req, res) => {
     const isMatch = await bcrypt.compare(password, dev.password);
     if (!isMatch) throw new Error("Invalid password.");
 
-    await Token.deleteMany({userId:dev._id})
+    await Token.deleteMany({ userId: dev._id });
 
-    const token = jwt.sign({ userId: dev._id, role: dev.role }, process.env.JWT_KEY, { expiresIn: "7d" });
+    const token = jwt.sign(
+      { userId: dev._id, role: dev.role },
+      process.env.JWT_KEY,
+      { expiresIn: "7d" }
+    );
 
-    await Token.create({userId:dev._id, token})
+    await Token.create({ userId: dev._id, token });
 
     return res.status(200).json({
       isSuccess: true,
@@ -179,8 +186,8 @@ exports.devLogin = async (req, res) => {
         name: dev.name,
         phone: dev.phone,
         user_role: dev.role,
-        id: dev._id
-      }
+        id: dev._id,
+      },
     });
   } catch (error) {
     return res.status(401).json({ isSuccess: false, message: error.message });
@@ -193,8 +200,12 @@ exports.logout = async (req, res) => {
     if (token) {
       await Token.deleteOne({ token });
     }
-    return res.status(200).json({ isSuccess: true, message: "Logout successfully." });
+    return res
+      .status(200)
+      .json({ isSuccess: true, message: "Logout successfully." });
   } catch (error) {
-    return res.status(500).json({ isSuccess: false, message: "Logout Fail", error });
+    return res
+      .status(500)
+      .json({ isSuccess: false, message: "Logout Fail", error });
   }
 };

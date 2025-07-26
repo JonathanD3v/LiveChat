@@ -9,7 +9,6 @@ const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 
 const Message = require("./models/Message");
-// const messageController = require("./controllers/message");
 const authRoutes = require("./routes/auth");
 const messageRoutes = require("./routes/chat");
 const merchantRoute = require("./routes/merchant");
@@ -17,7 +16,6 @@ const integrationRoutes = require("./routes/integrationRoute");
 const User = require("./models/User");
 const redis = require("./utils/redisClient");
 const Conversation = require("./models/Conversation");
-
 
 const app = express();
 const server = http.createServer(app);
@@ -32,14 +30,13 @@ const io = socketIo(server, {
 app.use(express.json());
 app.use(cors());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use("/api", authRoutes);
-app.use('/api', messageRoutes);
-app.use("/api/dev", merchantRoute)
+app.use("/api", messageRoutes);
+app.use("/api/dev", merchantRoute);
 app.use("/api/integration", integrationRoutes);
-
 
 mongoose
   .connect(process.env.MONGO_URL, {
@@ -49,29 +46,34 @@ mongoose
   .then(() => console.log("Connected to database"))
   .catch((error) => console.error("Database connection error:", error));
 
-  const getOtherParticipants = async (conversationId, senderId) => {
-    const conversation = await Conversation.findById(conversationId);
-    if (!conversation) return [];
-    const ids = [];
-    if (conversation.user && conversation.user.toString() !== senderId.toString()) {
-      ids.push(conversation.user.toString());
-    }
-    if (conversation.admin && conversation.admin.toString() !== senderId.toString()) {
-      ids.push(conversation.admin.toString());
-    }
-    return ids;
-  };
+const getOtherParticipants = async (conversationId, senderId) => {
+  const conversation = await Conversation.findById(conversationId);
+  if (!conversation) return [];
+  const ids = [];
+  if (
+    conversation.user &&
+    conversation.user.toString() !== senderId.toString()
+  ) {
+    ids.push(conversation.user.toString());
+  }
+  if (
+    conversation.admin &&
+    conversation.admin.toString() !== senderId.toString()
+  ) {
+    ids.push(conversation.admin.toString());
+  }
+  return ids;
+};
 
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
-  // console.log("token, ", token)
   if (!token) return next(new Error("Authentication error"));
   try {
     const decoded = jwt.verify(token, process.env.JWT_KEY);
     socket.user = decoded;
     next();
   } catch (err) {
-    console.error("jwt, ", err.message)
+    console.error("jwt, ", err.message);
     next(new Error("Authentication error"));
   }
 });
@@ -119,7 +121,6 @@ io.on("connection", async (socket) => {
       sender: data.senderId,
       content: data.content,
       type: data.type || "text",
-      
     });
 
     console.log(`Emitting to room: ${data.conversationId}`, message);
@@ -130,15 +131,20 @@ io.on("connection", async (socket) => {
     await redis.lPush(recentKey, JSON.stringify(message));
     await redis.lTrim(recentKey, 0, 9); // keep only last 10
 
-    const receiverIds = await getOtherParticipants(data.conversationId, data.senderId); 
-    console.log('Receivers:', receiverIds);
+    const receiverIds = await getOtherParticipants(
+      data.conversationId,
+      data.senderId
+    );
+    console.log("Receivers:", receiverIds);
     for (const receiverId of receiverIds) {
       const unreadKey = `unread_count:${receiverId}:${data.conversationId}`;
       await redis.incr(unreadKey);
     }
 
     // auto bot reply
-    const messageCount = await Message.countDocuments({ conversation: data.conversationId });
+    const messageCount = await Message.countDocuments({
+      conversation: data.conversationId,
+    });
     if (messageCount === 1) {
       setTimeout(async () => {
         const welcomeMessage = await Message.create({
@@ -171,6 +177,6 @@ io.on("connection", async (socket) => {
 app.set("io", io);
 
 const PORT = process.env.PORT || 5555;
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server is running on http://0.0.0.0:${PORT}`);
 });

@@ -1,36 +1,38 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 const mongoosePaginate = require("mongoose-paginate-v2");
 
-
-const conversationSchema = new mongoose.Schema({
-  user: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
+const conversationSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    admin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    status: {
+      type: String,
+      enum: ["active", "resolved", "pending"],
+      default: "active",
+    },
+    unreadCount: {
+      user: { type: Number, default: 0 },
+      admin: { type: Number, default: 0 },
+    },
+    lastMessage: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+    },
+    app_name_id: {
+      type: Number,
+      default: null,
+    },
+    participants: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
-  admin: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User' 
-  },
-  status: { 
-    type: String, 
-    enum: ['active', 'resolved', 'pending'], 
-    default: 'active' 
-  },
-  unreadCount: { 
-    user: { type: Number, default: 0 },
-    admin: { type: Number, default: 0 }
-  },
-  lastMessage: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Message' 
-  },
-  app_name_id: {
-    type: Number,
-    default: null,
-  },
-  participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
-}, { timestamps: true });
+  { timestamps: true }
+);
 
 const moment = require("moment-timezone");
 conversationSchema.pre("save", function (next) {
@@ -48,4 +50,4 @@ conversationSchema.pre("update", function (next) {
 
 conversationSchema.plugin(mongoosePaginate);
 
-module.exports = mongoose.model('Conversation', conversationSchema);
+module.exports = mongoose.model("Conversation", conversationSchema);
