@@ -157,9 +157,15 @@ exports.devLogin = async (req, res) => {
   //   return res.status(400).json({ isSuccess: false, message: errors.array()[0].msg });
   // }
 
-  const { name, password } = req.body;
+  const { name, password, secret_key } = req.body;
 
   try {
+    if (secret_key !== process.env.SECRET_KEY) {
+      return res
+        .status(400)
+        .json({ isSuccess: false, message: "Invalid Secret Key!" });
+    }
+
     const dev = await User.findOne({ name });
     if (!dev || dev.role !== "developer") {
       throw new Error("Unauthorized: dev access only.");
