@@ -128,6 +128,7 @@ io.on("connection", async (socket) => {
 
     console.log(`Emitting to room: ${data.conversationId}`, message);
     io.to(data.conversationId).emit("receive_message", message);
+    console.log(`[BACKEND] receive_message emitted successfully to room: ${data.conversationId}`);
 
     // Cache last 10 messages
     const recentKey = `recent_messages:${data.conversationId}`;
