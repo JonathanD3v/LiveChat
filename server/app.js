@@ -121,7 +121,7 @@ io.on("connection", async (socket) => {
     if (!senderId) throw new Error("Sender not authenticated");
     const message = await Message.create({
       conversation: data.conversationId,
-      sender: data.senderId,
+      sender: senderId,
       content: data.content,
       type: data.type || "text",
     });
