@@ -116,6 +116,9 @@ io.on("connection", async (socket) => {
     const messageId = uuidv4();
     const redisKey = `message_buffer:${messageId}`;
     await redis.set(redisKey, JSON.stringify(data), { EX: 300 });
+    const senderId = socket.user.userId;
+    console.log("sender_id", senderId);
+    if (!senderId) throw new Error("Sender not authenticated");
     const message = await Message.create({
       conversation: data.conversationId,
       sender: data.senderId,
