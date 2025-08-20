@@ -19,7 +19,7 @@ const createToken = (user) => {
 
 exports.authFromMerchant = async (req, res) => {
   const { app_name_id, app_secret_key, user } = req.body;
-  console.log("Incoming request from Adonis site", req.body);
+  // console.log("Incoming request from Adonis site", req.body);
 
   try {
     const merchant = await Merchant.findOne({ app_name_id, app_secret_key });

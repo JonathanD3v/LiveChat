@@ -162,7 +162,7 @@ exports.devLogin = async (req, res) => {
   try {
     if (secret_key !== process.env.SECRET_KEY) {
       return res
-        .status(400)
+        .status(403)
         .json({ isSuccess: false, message: "Invalid Secret Key!" });
     }
 
