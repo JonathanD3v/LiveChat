@@ -125,6 +125,9 @@ io.on("connection", async (socket) => {
         ? normalizeMyanmarText(data.content)
         : data.content;
 
+        console.log("original content", data.content)
+        console.log("normalize content", normalizedContent)
+
     const message = await Message.create({
       conversation: data.conversationId,
       sender: data.senderId,
