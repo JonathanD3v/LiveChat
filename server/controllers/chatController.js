@@ -72,12 +72,12 @@ const sendMessage = async (
   try {
     session.startTransaction();
 
-    console.log("sendMessage called with:", {
-      conversationId,
-      senderId,
-      content,
-      type,
-    });
+    // console.log("sendMessage called with:", {
+    //   conversationId,
+    //   senderId,
+    //   content,
+    //   type,
+    // });
     if (type === "text" && (!content || content.length > 500)) {
       throw new Error("Text message must be between 1 and 500 characters.");
     }
