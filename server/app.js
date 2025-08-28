@@ -7,6 +7,7 @@ require("dotenv").config();
 const path = require("path");
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
+const { normalizeMyanmarText } = require("./utils/myanmarText");
 
 const Message = require("./models/Message");
 const authRoutes = require("./routes/auth");
@@ -119,10 +120,15 @@ io.on("connection", async (socket) => {
     const senderId = socket.user.userId;
     console.log("sender_id", senderId);
     if (!senderId) throw new Error("Sender not authenticated");
+    const normalizedContent =
+      (data.type || "text") === "text"
+        ? normalizeMyanmarText(data.content)
+        : data.content;
+
     const message = await Message.create({
       conversation: data.conversationId,
       sender: data.senderId,
-      content: data.content,
+      content: normalizedContent,
       type: data.type || "text",
     });
 
@@ -154,7 +160,7 @@ io.on("connection", async (socket) => {
         const welcomeMessage = await Message.create({
           conversation: data.conversationId,
           sender: null,
-          content: "Hi! Channel to my welcome.",
+          content: normalizeMyanmarText("Hi! Channel to my welcome."),
           type: "text",
         });
         io.to(data.conversationId).emit("receive_message", welcomeMessage);

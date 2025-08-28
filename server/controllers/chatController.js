@@ -2,6 +2,8 @@ const { default: mongoose } = require("mongoose");
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 const User = require("../models/User");
+const { normalizeMyanmarText } = require("../utils/myanmarText");
+
 
 const getOrCreateConversation = async (userId) => {
   const session = await mongoose.startSession();
@@ -78,6 +80,10 @@ const sendMessage = async (
     //   content,
     //   type,
     // });
+    if (type === "text") {
+      content = normalizeMyanmarText(content);
+    }
+
     if (type === "text" && (!content || content.length > 500)) {
       throw new Error("Text message must be between 1 and 500 characters.");
     }
@@ -100,6 +106,8 @@ const sendMessage = async (
     ];
     if (!allowedIds.includes(senderId.toString()))
       throw new Error("Unauthorized sender");
+
+
 
     const message = await Message.create(
       [
@@ -270,7 +278,7 @@ const broadcastMessageFromAdmin = async (adminId, content, io) => {
       const message = new Message({
         conversation: convo._id,
         sender: adminId,
-        content,
+        content: normalizeMyanmarText(content),
         type: "text",
       });
 
